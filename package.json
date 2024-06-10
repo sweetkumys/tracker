@@ -1,6 +1,5 @@
 {
-  "homepage" : "https://sweetkumys.github.io/tracker/",
-
+  "homepage": "https://sweetkumys.github.io/tracker/",
   "name": "tracker",
   "version": "0.0.0",
   "private": true,
@@ -12,6 +11,7 @@
     "deploy": "sh deploy.sh"
   },
   "dependencies": {
+    "chart.js": "^4.4.3",
     "firebase": "^10.12.2",
     "vue": "^3.4.21",
     "vue-toastification": "^2.0.0-rc.5"

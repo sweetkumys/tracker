@@ -1,85 +1,89 @@
 <template>
-  <Header />
   <div class="container">
-    <Balance :total="total" />
-    <Expenses :income="+income" :expenses="+expenses" />
-    <TransList 
-      :transactions="transactions" 
-      @transactionDeleted="handleTransactionDeleted" 
-    />
-    <NewTransaction @transactionSubmitted="handleTransactionSubmitted" />
+    <NewTransaction @transactionSubmitted="addTransaction" />
+    <Balance :total="balance" /> 
+    <Expenses :income="totalIncome" :expenses="totalExpenses" />
+    <TransList :transactions="transactions" 
+                @transactionDeleted="deleteTransaction" />
+    <ChartComponent :transactions="transactions" /> 
   </div>
 </template>
 
-<script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { useToast } from 'vue-toastification';
-import { 
-  getFirestore, 
-  collection, 
-  onSnapshot, 
-  addDoc, 
-  deleteDoc, 
-  doc 
-} from 'firebase/firestore'; 
-import { app } from './firebase.js'; // Adjust path if necessary
-
-import Header from './components/Header.vue';
-import Balance from './components/Balance.vue';
+<script>
+import NewTransaction from './components/NewTransaction.vue';
+import Balance from './components/Balance.vue'; 
 import Expenses from './components/Expenses.vue';
 import TransList from './components/TransList.vue';
-import NewTransaction from './components/NewTransaction.vue';
+import ChartComponent from './components/ChartComponent.vue';
+import { ref, onMounted, computed } from 'vue';
+import { db } from './firebase'; 
+import { collection, onSnapshot, addDoc, doc, deleteDoc } from 'firebase/firestore';
 
-const toast = useToast();
-const db = getFirestore(app);
-const transactionsCollection = collection(db, 'transactions');
-const transactions = ref([]);
+export default {
+  components: {
+    NewTransaction,
+    Balance, 
+    Expenses,
+    TransList,
+    ChartComponent 
+  },
+  setup() {
+    const transactions = ref([]);
 
-onMounted(() => {
-  // Subscribe to real-time updates from Firestore
-  const unsubscribe = onSnapshot(transactionsCollection, (snapshot) => {
-    transactions.value = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  });
+    const addTransaction = async (transactionData) => {
+      try {
+        const transactionsCollection = collection(db, 'transactions');
+        await addDoc(transactionsCollection, transactionData);
+      } catch (error) {
+        console.error("Error adding document: ", error);
+      }
+    };
 
-  // Unsubscribe when the component is unmounted to avoid memory leaks
-  onUnmounted(unsubscribe); 
-});
+    const deleteTransaction = async (id) => {
+      try {
+        await deleteDoc(doc(db, 'transactions', id));
+      } catch (error) {
+        console.error("Error deleting document: ", error);
+      }
+    };
 
-const total = computed(() => {
-  return transactions.value.reduce((acc, transaction) => acc + transaction.amount, 0);
-});
+    onMounted(async () => {
+      try {
+        const transactionsCollection = collection(db, 'transactions');
+        onSnapshot(transactionsCollection, (snapshot) => {
+          transactions.value = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        });
+      } catch (error) {
+        console.error("Error fetching documents: ", error);
+      }
+    });
 
-const income = computed(() => {
-  return transactions.value
-    .filter(transaction => transaction.amount > 0)
-    .reduce((acc, transaction) => acc + transaction.amount, 0)
-    .toFixed(2);
-});
+    const totalIncome = computed(() => {
+      return transactions.value
+        .filter(transaction => transaction.amount > 0)
+        .reduce((sum, transaction) => sum + transaction.amount, 0)
+        .toFixed(2);
+    });
 
-const expenses = computed(() => {
-  return transactions.value
-    .filter(transaction => transaction.amount < 0)
-    .reduce((acc, transaction) => acc + transaction.amount, 0)
-    .toFixed(2);
-});
+    const totalExpenses = computed(() => {
+      return Math.abs(transactions.value
+        .filter(transaction => transaction.amount < 0)
+        .reduce((sum, transaction) => sum + transaction.amount, 0))
+        .toFixed(2); 
+    });
 
-const handleTransactionSubmitted = async (transactionData) => {
-  try {
-    await addDoc(transactionsCollection, transactionData);
-    toast.success('Transaction added.');
-  } catch (error) {
-    console.error('Error adding transaction: ', error);
-    toast.error('Failed to add transaction.');
-  }
-};
+    const balance = computed(() => {
+      return (totalIncome.value - totalExpenses.value).toFixed(2);
+    });
 
-const handleTransactionDeleted = async (id) => {
-  try {
-    await deleteDoc(doc(db, 'transactions', id)); 
-    toast.success('Transaction deleted.');
-  } catch (error) {
-    console.error('Error deleting transaction: ', error);
-    toast.error('Failed to delete transaction.');
+    return {
+      transactions,
+      addTransaction,
+      deleteTransaction,
+      totalIncome, 
+      totalExpenses,
+      balance 
+    };
   }
 };
 </script>
